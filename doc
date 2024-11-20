@@ -1,0 +1,8 @@
+common-affe-docker-local/
+jf rt-cleanup clean fit-maven-snapshot-local --time-unit=month --no-dl=1
+ 
+jfrog rt-cleanup clean common-affe-docker-local --time-unit=month --no-dl=1
+
+USERNAME="ram.pasula@teliacompany.com"
+PASSWORD="cmVmdGtuOjAxOjE3NjMxMDAwNDE6aVgxb3MyU2lHaUhnYllHYXV2ekxXZE5IbXdX"
+ARTIFACTORY_URL="https://jfrog.teliacompany.io/artifactory";
