@@ -1,5 +1,8 @@
 name: Cleanup Repositories
 on:
+  push:
+    branch:
+    main
   workflow_dispatch: # Triggered manually
 
 defaults:
