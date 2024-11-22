@@ -1,5 +1,9 @@
 name: Built Java Library
+
 on:
+  push:
+    branch:
+      main
   workflow_call:
     inputs:
       application_name:
