@@ -1,0 +1,57 @@
+name: Cleanup Repositories
+on:
+  workflow_dispatch: # Triggered manually
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cleanup:
+    name: Cleanup All Repositories
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v3.0.0
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          ARTIFACTORY_USERNAME: ${{ secrets.HENKAN_DEV_RW_USER }}
+          ARTIFACTORY_PASSWORD: ${{ secrets.HENKAN_DEV_RW_PASSWORD }}
+
+      - name: Cleanup Repositories
+        run: |
+          echo "Starting cleanup for all repositories..."
+
+          # Cleanup Maven Snapshot Repository
+          jf rt cleanup clean sharedlib-henkan-maven-snapshot-local --time-unit=month --time=1 --no-dl=1
+          echo "Cleaned sharedlib-henkan-maven-snapshot-local repository."
+
+          # Cleanup Maven Release Repository
+          jf rt cleanup clean sharedlib-henkan-maven-release-local --time-unit=month --time=3 --no-dl=1
+          echo "Cleaned sharedlib-henkan-maven-release-local repository."
+
+          # Cleanup Docker Development Repository
+          jf rt cleanup clean sharedlib-henkan-docker-dev-local --time-unit=month --time=3 --no-dl=1
+          echo "Cleaned sharedlib-henkan-docker-dev-local repository."
+
+          # Cleanup Docker Production Repository
+          jf rt cleanup clean sharedlib-henkan-docker-prd-local --time-unit=month --time=6 --no-dl=1
+          echo "Cleaned sharedlib-henkan-docker-prd-local repository."
+
+          # Cleanup Common Docker Repository
+          jf rt cleanup clean common-dockerhub-remote.jfrog.teliacompany.io --time-unit=month --time=6 --no-dl=1
+          echo "Cleaned common-dockerhub-remote.jfrog.teliacompany.io repository."
+
+          # Cleanup Common Maven Repository
+          jf rt cleanup clean common-maven-remote-virtual --time-unit=month --time=6 --no-dl=1
+          echo "Cleaned common-maven-remote-virtual repository."
+
+          echo "Cleanup process completed successfully."
+        env:
+          JF_URL: ${{ secrets.JF_URL }}
+          ARTIFACTORY_USERNAME: ${{ secrets.HENKAN_DEV_RW_USER }}
+          ARTIFACTORY_PASSWORD: ${{ secrets.HENKAN_DEV_RW_PASSWORD }}

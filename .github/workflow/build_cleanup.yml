@@ -1,0 +1,157 @@
+name: Built Java Library
+on:
+  workflow_call:
+    inputs:
+      application_name:
+        type: string
+        required: false
+        description: Application Name to be used. If not provided, artifact id from pom.xml will be used.
+      docker_common_url:
+        type: string
+        required: false
+        default: common-dockerhub-remote.jfrog.teliacompany.io
+        description: Docker Repository URL for getting dependency
+      docker_redhat_url:
+        type: string
+        required: false
+        default: common-redhat-docker-remote.jfrog.teliacompany.io
+        description: Docker Repository URL for getting dependency
+      docker_dev_url:
+        type: string
+        required: false
+        default: sharedlib-henkan-docker-dev-local.jfrog.teliacompany.io
+        description: Docker Repository URL for getting dependency
+      docker_prd_url:
+        type: string
+        required: false
+        default: sharedlib-henkan-docker-prd-local.jfrog.teliacompany.io
+        description: Docker Repository URL for getting dependency
+      docker_file_location:
+        type: string
+        required: false
+        default: Dockerfile
+        description: Location for dockerfile
+      mvn_release_url:
+        type: string
+        required: false
+        default: https://jfrog.teliacompany.io/artifactory/sharedlib-henkan-maven-release-local
+        description: Maven URL for deploying releases
+      mvn_snapshot_url:
+        type: string
+        required: false
+        default: https://jfrog.teliacompany.io/artifactory/sharedlib-henkan-maven-snapshot-local
+        description: Maven URL for deploying snapshots
+      mvn_common_url:
+        type: string
+        required: false
+        default: https://jfrog.teliacompany.io/artifactory/common-maven-remote-virtual
+        description: Maven URL for getting dependency
+      proxy_host:
+        type: string
+        required: false
+        default: proxy-se.ddc.teliasonera.net
+        description: Proxy to be used for connecting to internet
+      proxy_port:
+        type: number
+        required: false
+        default: 8080
+        description: Proxy port to be used with proxy_host
+    secrets:
+      HENKAN_PRD_RW_USER:
+        required: true
+      HENKAN_PRD_RW_PASSWORD:
+        required: true
+      HENKAN_DEV_RW_USER:
+        required: true
+      HENKAN_DEV_RW_PASSWORD:
+        required: true
+      SONAR_TOKEN:
+        required: true
+      SONAR_HOST_URL:
+        required: true
+      MVN_USER:
+        required: true
+      MVN_PASS:
+        required: true
+      JF_URL:
+        required: true
+      DATADOG_ACCESS_TOKEN:
+        required: true
+      SLACK_WEBHOOK_URL:
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Java and Docker Build
+    runs-on: [medium, telia-managed, Linux, X64, docker]
+
+    env:
+      MVN_RELEASE_URL: ${{ inputs.mvn_release_url }}
+      MVN_SNAPSHOT_URL: ${{ inputs.mvn_snapshot_url }}
+      MVN_COMMON_URL: ${{ inputs.mvn_common_url }}
+      PROXY_HOST: ${{ inputs.proxy_host }}
+      PROXY_PORT: ${{ inputs.proxy_port }}
+      DOCKER_COMMON_HENKAN_URL: ${{ inputs.docker_common_url }}
+      DOCKER_REDHAT_HENKAN_URL: ${{ inputs.docker_redhat_url }}
+      DOCKER_DEV_HENKAN_URL: ${{ inputs.docker_dev_url }}
+      DOCKER_PRD_HENKAN_URL: ${{ inputs.docker_prd_url }}
+      DOCKER_FILE_LOCATION: ${{ inputs.docker_file_location }}
+      HENKAN_PRD_RW_USER: ${{ secrets.HENKAN_PRD_RW_USER }}
+      HENKAN_PRD_RW_PASSWORD: ${{ secrets.HENKAN_PRD_RW_PASSWORD }}
+      HENKAN_DEV_RW_USER: ${{ secrets.HENKAN_DEV_RW_USER }}
+      HENKAN_DEV_RW_PASSWORD: ${{ secrets.HENKAN_DEV_RW_PASSWORD }}
+      JF_URL: ${{ secrets.JF_URL }}
+      DATADOG_ACCESS_TOKEN: ${{ secrets.DATADOG_ACCESS_TOKEN }}
+      SLACK_WEBHOOK_URL: "${{ secrets.SLACK_WEBHOOK_URL }}"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v3.0.0
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          ARTIFACTORY_USERNAME: ${{ secrets.HENKAN_DEV_RW_USER }}
+          ARTIFACTORY_PASSWORD: ${{ secrets.HENKAN_DEV_RW_PASSWORD }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v2
+        with:
+          java-version: 11
+          distribution: 'temurin'
+
+      - name: Download Gradle Executables
+        uses: gradle/gradle-build-action@v2
+
+      - name: Setup Gradle
+        run: |
+          echo "snapshotsUrl=${{ env.MVN_SNAPSHOT_URL }}" >> gradle.properties
+          echo "releasesUrl=${{ env.MVN_RELEASE_URL }}" >> gradle.properties
+
+      - name: Build with Gradle
+        run: |
+          ./gradlew build \
+          -PmavenSharedLibrariesRepositoryUrl='https://jfrog.teliacompany.io/artifactory/sharedlib-shared-libraries/' \
+          -PmavenUser=${MVN_USER} \
+          -PmavenPass=${MVN_PASS}
+        env:
+          MVN_USER: ${{ secrets.HENKAN_DEV_RW_USER }}
+          MVN_PASS: ${{ secrets.HENKAN_DEV_RW_PASSWORD }}
+
+      - name: Cleanup Old Snapshots
+        run: |
+          jf rt cleanup clean fit-maven-snapshot-local --time-unit=month --no-dl=1
+        env:
+          JF_URL: ${{ env.JF_URL }}
+          ARTIFACTORY_USERNAME: ${{ secrets.HENKAN_DEV_RW_USER }}
+          ARTIFACTORY_PASSWORD: ${{ secrets.HENKAN_DEV_RW_PASSWORD }}
+
+      - name: Docker Build and Push
+        run: |
+          docker build -t ${{ env.DOCKER_DEV_HENKAN_URL }}/sharedlib/${APPLICATION_NAME}:${VERSION} .
+          docker push ${{ env.DOCKER_DEV_HENKAN_URL }}/sharedlib/${APPLICATION_NAME}:${VERSION}
